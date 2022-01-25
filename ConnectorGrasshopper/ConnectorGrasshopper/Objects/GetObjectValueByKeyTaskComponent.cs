@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -74,9 +75,9 @@ namespace ConnectorGrasshopper.Objects
         case null:
           AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Key not found in object");
           break;
-        case IList<object> list:
+        case IEnumerable list:
         {
-          var ghGoos = list.Select(GH_Convert.ToGoo).ToList();
+          var ghGoos = list.Cast<object>().Select(GH_Convert.ToGoo).ToList();
           DA.SetDataList(0, ghGoos);
           break;
         }
@@ -105,9 +106,9 @@ namespace ConnectorGrasshopper.Objects
           case null:
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Key not found in object: " + key);
             break;
-          case List<object> list:
+          case IList list:
           {
-            value = list.Select(
+            value = list.Cast<object>().Select(
               item => Converter != null ? Utilities.TryConvertItemToNative(item, Converter) : item).ToList();
             break;
           }

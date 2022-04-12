@@ -7,4 +7,6 @@
   <StyleInclude Source="/Styles/MenuItem.xaml" />
   <StyleInclude Source="/Styles/Dialog.xaml" />
   <StyleInclude Source="/Styles/Text.xaml" />
+  <StyleInclude Source="/Styles/TextBox.xaml" />
+  <StyleInclude Source="/Styles/Expander.xaml" />
 </Styles>

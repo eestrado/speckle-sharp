@@ -24,8 +24,6 @@ namespace Speckle.ConnectorRevit.UI
 {
   public partial class ConnectorBindingsRevit2
   {
-
-
     /// <summary>
     /// Receives a stream and bakes into the existing revit file.
     /// </summary>
@@ -33,33 +31,39 @@ namespace Speckle.ConnectorRevit.UI
     /// <returns></returns>
     public override async Task<StreamState> ReceiveStream(StreamState state, ProgressViewModel progress)
     {
-      ConversionErrors.Clear();
-      OperationErrors.Clear();
 
       var kit = KitManager.GetDefaultKit();
       var converter = kit.LoadConverter(ConnectorRevitUtils.RevitAppName);
       converter.SetContextDocument(CurrentDoc.Document);
       var previouslyReceiveObjects = state.ReceivedObjects;
 
+      // set converter settings as tuples (setting slug, setting selection)
+      var settings = new Dictionary<string, string>();
+      foreach (var setting in state.Settings)
+        settings.Add(setting.Slug, setting.Selection);
+      converter.SetConverterSettings(settings);
+
       var transport = new ServerTransport(state.Client.Account, state.StreamId);
 
-      string referencedObject = state.ReferencedObject;
+      var stream = await state.Client.StreamGet(state.StreamId);
 
       if (progress.CancellationTokenSource.Token.IsCancellationRequested)
       {
         return null;
       }
 
+      Commit myCommit = null;
       //if "latest", always make sure we get the latest commit when the user clicks "receive"
       if (state.CommitId == "latest")
       {
         var res = await state.Client.BranchGet(progress.CancellationTokenSource.Token, state.StreamId, state.BranchName, 1);
-        referencedObject = res.commits.items.FirstOrDefault().referencedObject;
+        myCommit = res.commits.items.FirstOrDefault();
       }
-
-      //var commit = state.Commit;
-
-
+      else
+      {
+        myCommit = await state.Client.CommitGet(progress.CancellationTokenSource.Token, state.StreamId, state.CommitId);
+      }
+      string referencedObject = myCommit.referencedObject;
 
       var commitObject = await Operations.Receive(
           referencedObject,
@@ -68,17 +72,30 @@ namespace Speckle.ConnectorRevit.UI
           onProgressAction: dict => progress.Update(dict),
           onErrorAction: (s, e) =>
           {
-            OperationErrors.Add(e);
-            //state.Errors.Add(e);
+            progress.Report.LogOperationError(e);
             progress.CancellationTokenSource.Cancel();
           },
-          //onTotalChildrenCountKnown: count => Execute.PostToUIThread(() => state.Progress.Maximum = count),
+          onTotalChildrenCountKnown: count => { progress.Max = count; },
           disposeTransports: true
           );
 
-      if (OperationErrors.Count != 0)
+      try
       {
-        //Globals.Notify("Failed to get commit.");
+        await state.Client.CommitReceived(new CommitReceivedInput
+        {
+          streamId = stream?.id,
+          commitId = myCommit?.id,
+          message = myCommit?.message,
+          sourceApplication = ConnectorRevitUtils.RevitAppName 
+        });
+      }
+      catch
+      {
+        // Do nothing!
+      }
+
+      if (progress.Report.OperationErrorsCount != 0)
+      {
         return state;
       }
 
@@ -108,7 +125,7 @@ namespace Speckle.ConnectorRevit.UI
           // receive was cancelled by user
           if (newPlaceholderObjects == null)
           {
-            converter.ConversionErrors.Add(new Exception("fatal error: receive cancelled by user"));
+            progress.Report.LogConversionError(new Exception("fatal error: receive cancelled by user"));
             t.RollBack();
             return;
           }
@@ -118,31 +135,15 @@ namespace Speckle.ConnectorRevit.UI
           state.ReceivedObjects = newPlaceholderObjects;
 
           t.Commit();
-
-          //state.Errors.AddRange(converter.ConversionErrors);
+          progress.Report.Merge(converter.Report);
         }
 
       });
 
-
-
-      if (converter.ConversionErrors.Any(x => x.Message.Contains("fatal error")))
+      if (converter.Report.ConversionErrors.Any(x => x.Message.Contains("fatal error")))
       {
         // the commit is being rolled back
         return null;
-      }
-
-      try
-      {
-        //await state.RefreshStream();
-
-        //WriteStateToFile();
-      }
-      catch (Exception e)
-      {
-        //WriteStateToFile();
-        //state.Errors.Add(e);
-        //Globals.Notify($"Receiving done, but failed to update stream from server.\n{e.Message}");
       }
 
       return state;
@@ -161,7 +162,6 @@ namespace Speckle.ConnectorRevit.UI
         {
           CurrentDoc.Document.Delete(element.Id);
         }
-
       }
     }
 
@@ -198,7 +198,7 @@ namespace Speckle.ConnectorRevit.UI
         }
         catch (Exception e)
         {
-          //state.Errors.Add(e);
+          progress.Report.LogConversionError(e);
         }
       }
 
@@ -251,10 +251,13 @@ namespace Speckle.ConnectorRevit.UI
         return objects;
       }
 
+      else
+      {
+        if(obj != null && !obj.GetType().IsPrimitive)
+          converter.Report.Log($"Skipped object of type {obj.GetType()}, not supported.");
+      }
+
       return objects;
     }
-
-
-
   }
 }

@@ -1,16 +1,6 @@
 ﻿using Avalonia;
 using Avalonia.ReactiveUI;
-using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using DesktopUI2.ViewModels;
-using DesktopUI2.Views.Pages;
-using ReactiveUI;
-using Splat;
-
 
 namespace DesktopUI2.Launcher
 {
@@ -25,6 +15,16 @@ namespace DesktopUI2.Launcher
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
     {
+
+      // to debug the VS previewer
+      // 1. open another instanc of the project in VS
+      // 2. uncomment the lines below
+      // 3. close and reopen the problematic XAML window
+
+      //Debugger.Launch();
+      //while (!Debugger.IsAttached)
+      //  Thread.Sleep(100);
+
       string path = Path.GetDirectoryName(typeof(App).Assembly.Location);
 
       string nativeLib = Path.Combine(path, "Native", "libAvalonia.Native.OSX.dylib");
